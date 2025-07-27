@@ -5,7 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5dda07c0-1c0f-40c7-b24b-aa00fa7dfa0d" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/src/gui/CrawlerApp.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/.idea/topic-focused-web-crawler.iml" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -109,7 +109,7 @@
       <updated>1752949951228</updated>
       <workItem from="1752949952512" duration="652000" />
       <workItem from="1753507703276" duration="3552000" />
-      <workItem from="1753581951176" duration="4804000" />
+      <workItem from="1753581951176" duration="4990000" />
     </task>
     <servers />
   </component>
