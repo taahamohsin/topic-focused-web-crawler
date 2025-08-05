@@ -34,27 +34,30 @@ public class CrawlTask implements Runnable {
     @Override
     public void run() {
         try {
-            Document doc = Jsoup.connect(url).timeout(5000).get();
+            Document doc = Jsoup.connect(this.url).timeout(5000).get();
             String html = doc.html();
 
-            List<SentenceMatch> matchingSentences = parser.extractMatchingSentences(html, url);
-            matchingSentences.forEach(sentenceMatch -> onMatch.accept(sentenceMatch));
+            List<SentenceMatch> matchingSentences = this.parser.extractMatchingSentences(html, url);
+            matchingSentences.forEach(sentenceMatch -> this.onMatch.accept(sentenceMatch));
 
-            if (depth < this.config.getMaxDepth()) {
+            if (this.depth < this.config.getMaxDepth()) {
                 Elements links = doc.select("a[href]");
                 int followed = 0;
 
                 for (Element link : links) {
                     final String absUrl = link.absUrl("href");
-                    if (isInternalLink(absUrl) && !this.manager.hasVisited(absUrl)) {
-                         this.manager.submitNewLink(absUrl, this.depth + 1);
-                        if (++followed >= 10) break; // Cap at 10 links
+                    if (isInternalLink(absUrl)) {
+                        boolean submitted = this.manager.submitNewLink(absUrl, this.depth + 1);
+                        if (submitted) {
+                            followed++;
+                            if (followed >= 10) break;
+                        }
                     }
                 }
             }
 
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Error crawling " + this.url + ": " + e.getMessage());
         }
     }
 
