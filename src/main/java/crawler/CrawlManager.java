@@ -19,6 +19,7 @@ public class CrawlManager {
     private final AtomicInteger pagesClaimed;
     private final Consumer<Integer> onProgressUpdate;
 
+
     public CrawlManager(CrawlConfig config, Consumer<SentenceMatch> onMatch, Consumer<Integer> onProgressUpdate) {
         this.config = config;
         this.parser = new HTMLParser(config.getTopic());
@@ -29,10 +30,6 @@ public class CrawlManager {
         this.pagesClaimed = new AtomicInteger(0);
         this.onProgressUpdate = onProgressUpdate;
     }
-
-//    public boolean hasVisited(String url) {
-//        return visited.contains(url);
-//    }
 
     public void startCrawl() {
         final String seedUrl = this.config.getSeedUrl();
