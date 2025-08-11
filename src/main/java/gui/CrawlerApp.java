@@ -5,7 +5,6 @@ import javax.swing.text.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.List;
 
 import model.CrawlConfig;
 import crawler.CrawlManager;
@@ -19,8 +18,6 @@ public class CrawlerApp extends JFrame {
     private final JTextPane resultsArea;
     private final JLabel statusLabel;
     private final AtomicInteger resultCount = new AtomicInteger(0);
-    private final JProgressBar progressBar;
-    private final JLabel progressLabel;
     private final StyledDocument documentReference;
     private final JPanel searchPanel;
     private final JTextField searchField;
@@ -33,6 +30,11 @@ public class CrawlerApp extends JFrame {
     private final JPanel centerPanel;
     private final Style defaultStyle;
     private long crawlStartTime;
+
+    // Keep a handle to the scroll pane and a simple loading panel shown IN the results area
+    private final JScrollPane resultsScroll;
+    private final JPanel loadingPanel;
+    private boolean resultsShownOnce = false;
 
     public CrawlerApp() {
         super("Topic-Focused Web Crawler");
@@ -51,13 +53,6 @@ public class CrawlerApp extends JFrame {
         maxPagesField = new JTextField("10");
         statusLabel = new JLabel();
 
-        progressBar = new JProgressBar();
-        progressBar.setMinimum(0);
-        progressBar.setMaximum(100);
-        progressBar.setStringPainted(false);
-
-        progressLabel = new JLabel("0%");
-
         inputPanel.add(new JLabel("Seed URL:"));
         inputPanel.add(urlField);
         inputPanel.add(new JLabel("Keyword:"));
@@ -70,19 +65,23 @@ public class CrawlerApp extends JFrame {
         startButton = new JButton("Start Crawl");
         startButton.addActionListener(this::handleStart);
 
+        // Results area + document
         resultsArea = new JTextPane();
         documentReference = resultsArea.getStyledDocument();
         defaultStyle = resultsArea.addStyle("DefaultStyle", null);
         StyleConstants.setForeground(defaultStyle, Color.BLACK);
-
         resultsArea.setEditable(false);
-        JScrollPane scrollPane = new JScrollPane(resultsArea);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("Crawl Results"));
 
-        centerPanel = new JPanel(new BorderLayout());
-        centerPanel.add(scrollPane, BorderLayout.CENTER);
-        add(centerPanel, BorderLayout.CENTER);
+        resultsScroll = new JScrollPane(resultsArea);
+        resultsScroll.setBorder(BorderFactory.createTitledBorder("Crawl Results"));
 
+        // Loading panel shown in place of resultsArea inside the scroll pane's viewport
+        loadingPanel = new JPanel(new GridBagLayout());
+        JLabel loadingLabel = new JLabel("<html><div style='text-align:center;'>⏳<br/>Currently crawling…<br/></html>");
+        loadingLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        loadingPanel.add(loadingLabel);
+
+        // Search panel
         searchField = new JTextField(20);
         searchButton = new JButton("Find");
         findNextButton = new JButton("Find Next");
@@ -94,13 +93,13 @@ public class CrawlerApp extends JFrame {
         searchPanel.add(searchButton);
         searchPanel.add(findNextButton);
         searchPanel.setVisible(false);
+
         this.highlighter = resultsArea.getHighlighter();
         this.highlightPainter = new DefaultHighlighter.DefaultHighlightPainter(Color.YELLOW);
 
         searchButton.addActionListener(e -> {
             lastSearchTerm = searchField.getText().trim();
             if (lastSearchTerm.isEmpty()) return;
-
             highlighter.removeAllHighlights();
             lastSearchIndex = 0;
             findNextButton.setEnabled(true);
@@ -108,25 +107,23 @@ public class CrawlerApp extends JFrame {
         });
 
         findNextButton.addActionListener(e -> {
-            if (lastSearchTerm.isEmpty()) {
-                lastSearchTerm = searchField.getText().trim();
-            }
+            if (lastSearchTerm.isEmpty()) lastSearchTerm = searchField.getText().trim();
             findNextMatch();
         });
 
+        // Center panel (kept as BorderLayout so we can drop searchPanel NORTH later)
+        centerPanel = new JPanel(new BorderLayout());
+        centerPanel.add(resultsScroll, BorderLayout.CENTER);
+
+        // Top container for inputs and start button
         JPanel top = new JPanel(new BorderLayout());
         top.add(inputPanel, BorderLayout.CENTER);
-
-        JPanel bottom = new JPanel(new BorderLayout());
-        top.add(bottom, BorderLayout.SOUTH);
-        bottom.add(startButton, BorderLayout.NORTH);
-
-        JPanel progressPanel = new JPanel(new BorderLayout());
-        progressPanel.add(progressBar, BorderLayout.CENTER);
-        progressPanel.add(progressLabel, BorderLayout.EAST);
-        bottom.add(progressPanel, BorderLayout.SOUTH);
+        JPanel bottomOfTop = new JPanel(new BorderLayout());
+        top.add(bottomOfTop, BorderLayout.SOUTH);
+        bottomOfTop.add(startButton, BorderLayout.NORTH);
 
         add(top, BorderLayout.NORTH);
+        add(centerPanel, BorderLayout.CENTER);
         add(statusLabel, BorderLayout.SOUTH);
     }
 
@@ -135,10 +132,7 @@ public class CrawlerApp extends JFrame {
         String searchTerm = lastSearchTerm.toLowerCase();
 
         int index = content.indexOf(searchTerm, lastSearchIndex);
-        if (index == -1 && lastSearchIndex > 0) {
-            // Restart from top
-            index = content.indexOf(searchTerm);
-        }
+        if (index == -1 && lastSearchIndex > 0) index = content.indexOf(searchTerm);
 
         if (index >= 0) {
             try {
@@ -152,7 +146,6 @@ public class CrawlerApp extends JFrame {
             }
         }
     }
-
 
     private void appendWithHighlight(String sentence, String keyword) {
         Style keywordStyle = resultsArea.getStyle("KeywordStyle");
@@ -212,10 +205,10 @@ public class CrawlerApp extends JFrame {
         clearResults();
         startButton.setEnabled(false);
         resultCount.set(0);
-        progressBar.setValue(0);
-        progressLabel.setText("0%");
         searchPanel.setVisible(false);
         crawlStartTime = System.currentTimeMillis();
+
+        showLoadingInResults();
 
         SwingWorker<Void, Integer> worker = new SwingWorker<Void, Integer>() {
             @Override
@@ -228,21 +221,12 @@ public class CrawlerApp extends JFrame {
                                     match.getSentence(),
                                     match.getSourceUrl()), config.getTopic());
                             statusLabel.setText(String.format("Found %d matches so far...", resultCount.get()));
+                            showResultsOnce(); // switch back to the text pane on first result
                         }),
-                        progress -> {
-                            int percentage = Math.min(100, (int) ((progress / (double) maxPages) * 100));
-                            publish(percentage);
-                        }
+                        pagesProcessed -> { /* no-op */ }
                 );
                 crawlManager.startCrawl();
                 return null;
-            }
-
-            @Override
-            protected void process(List<Integer> chunks) {
-                int latestProgress = chunks.get(chunks.size() - 1);
-                progressBar.setValue(latestProgress);
-                progressLabel.setText(latestProgress + "%");
             }
 
             @Override
@@ -251,8 +235,8 @@ public class CrawlerApp extends JFrame {
                 double elapsedSeconds = elapsedMillis / 1000.0;
 
                 SwingUtilities.invokeLater(() -> {
-                    progressBar.setValue(100);
-                    progressLabel.setText("100%");
+                    // Ensure we're showing the results view even if there were zero matches
+                    showResultsOnFinish();
                     startButton.setEnabled(true);
                     statusLabel.setText(String.format("Found %d matches in %.2f seconds", resultCount.get(), elapsedSeconds));
 
@@ -263,8 +247,8 @@ public class CrawlerApp extends JFrame {
 
                     try {
                         documentReference.insertString(documentReference.getLength(), "\nCrawl complete!\n", defaultStyle);
-                    } catch (BadLocationException e) {
-                        e.printStackTrace();
+                    } catch (BadLocationException ex) {
+                        ex.printStackTrace();
                     }
 
                     revalidate();
@@ -276,23 +260,25 @@ public class CrawlerApp extends JFrame {
         worker.execute();
     }
 
-    private void performSearch() {
-        String query = searchField.getText().trim().toLowerCase();
-        if (query.isEmpty()) return;
+    private void showLoadingInResults() {
+        resultsShownOnce = false;
+        resultsScroll.setViewportView(loadingPanel);
+        resultsScroll.getViewport().revalidate();
+        resultsScroll.getViewport().repaint();
+    }
 
-        try {
-            String text = documentReference.getText(0, documentReference.getLength()).toLowerCase();
-            int index = text.indexOf(query);
-            if (index >= 0) {
-                resultsArea.setCaretPosition(index);
-                resultsArea.select(index, index + query.length());
-                resultsArea.getCaret().setSelectionVisible(true);
-            } else {
-                JOptionPane.showMessageDialog(this, "Keyword not found.", "Search", JOptionPane.INFORMATION_MESSAGE);
-            }
-        } catch (BadLocationException ex) {
-            ex.printStackTrace();
-        }
+    private void showResultsOnce() {
+        if (resultsShownOnce) return;
+        resultsShownOnce = true;
+        resultsScroll.setViewportView(resultsArea);
+        resultsScroll.getViewport().revalidate();
+        resultsScroll.getViewport().repaint();
+    }
+
+    private void showResultsOnFinish() {
+        resultsScroll.setViewportView(resultsArea);
+        resultsScroll.getViewport().revalidate();
+        resultsScroll.getViewport().repaint();
     }
 
     public static void main(String[] args) {
