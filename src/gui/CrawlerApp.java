@@ -31,7 +31,7 @@ public class CrawlerApp extends JFrame {
     private int lastSearchIndex = 0;
     private String lastSearchTerm = "";
     private final JPanel centerPanel;
-    private Style defaultStyle;
+    private final Style defaultStyle;
     private long crawlStartTime;
 
     public CrawlerApp() {
