@@ -43,29 +43,52 @@ public class CrawlerApp extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(800, 500);
 
-        // Top panel for inputs
-        JPanel inputPanel = new JPanel(new GridLayout(3, 2, 10, 10));
+        // ========= Top panel (inputs) — no GridBag, just nested panels =========
+        JPanel inputPanel = new JPanel();
+        inputPanel.setLayout(new BoxLayout(inputPanel, BoxLayout.Y_AXIS));
         inputPanel.setBorder(BorderFactory.createTitledBorder("Crawl Settings"));
 
+        // Row 1: Seed URL (full line)
+        JPanel urlRow = new JPanel(new BorderLayout(8, 0));
+        JLabel urlLabel = new JLabel("Seed URL:");
         urlField = new JTextField("https://example.com");
-        topicField = new JTextField("example");
-        depthField = new JTextField("1");
-        maxPagesField = new JTextField("10");
-        statusLabel = new JLabel();
+        urlRow.add(urlLabel, BorderLayout.WEST);
+        urlRow.add(urlField, BorderLayout.CENTER);
 
-        inputPanel.add(new JLabel("Seed URL:"));
-        inputPanel.add(urlField);
-        inputPanel.add(new JLabel("Keyword:"));
-        inputPanel.add(topicField);
-        inputPanel.add(new JLabel("Depth Limit:"));
-        inputPanel.add(depthField);
-        inputPanel.add(new JLabel("Max Pages:"));
-        inputPanel.add(maxPagesField);
+        // Row 2: Keyword (full line, slightly larger)
+        JPanel topicRow = new JPanel(new BorderLayout(8, 0));
+        JLabel topicLabel = new JLabel("Topic:");
+        topicField = new JTextField("example", 28); // a bit wider than default
+        topicRow.add(topicLabel, BorderLayout.WEST);
+        topicRow.add(topicField, BorderLayout.CENTER);
 
-        startButton = new JButton("Start Crawl");
+        // Row 3: Depth + Max Pages + Start button (all in one row)
+        JPanel paramsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        JLabel depthLabel = new JLabel("Depth Limit:");
+        depthField = new JTextField("1", 4);  // small numeric-ish field
+        JLabel maxPagesLabel = new JLabel("Max Pages:");
+        maxPagesField = new JTextField("10", 4); // small numeric-ish field
+
+        startButton = new JButton("Start");
+        startButton.setMargin(new Insets(2, 8, 2, 8));
+        startButton.setPreferredSize(new Dimension(90, 26));
         startButton.addActionListener(this::handleStart);
 
-        // Results area + document
+        paramsRow.add(depthLabel);
+        paramsRow.add(depthField);
+        paramsRow.add(maxPagesLabel);
+        paramsRow.add(maxPagesField);
+        paramsRow.add(Box.createHorizontalStrut(12));
+        paramsRow.add(startButton); // sits right after Max Pages, not stretched
+
+        // Assemble the input panel
+        inputPanel.add(urlRow);
+        inputPanel.add(Box.createVerticalStrut(6));
+        inputPanel.add(topicRow);
+        inputPanel.add(Box.createVerticalStrut(6));
+        inputPanel.add(paramsRow);
+
+        // ========= Results area =========
         resultsArea = new JTextPane();
         documentReference = resultsArea.getStyledDocument();
         defaultStyle = resultsArea.addStyle("DefaultStyle", null);
@@ -75,13 +98,15 @@ public class CrawlerApp extends JFrame {
         resultsScroll = new JScrollPane(resultsArea);
         resultsScroll.setBorder(BorderFactory.createTitledBorder("Crawl Results"));
 
-        // Loading panel shown in place of resultsArea inside the scroll pane's viewport
+        // Simple loading panel shown inside the results viewport while crawling
         loadingPanel = new JPanel(new GridBagLayout());
-        JLabel loadingLabel = new JLabel("<html><div style='text-align:center;'>⏳<br/>Currently crawling…<br/></html>");
+        JLabel loadingLabel = new JLabel(
+                "<html><div style='text-align:center;'>⏳<br/>Currently crawling…<br/></div></html>"
+        );
         loadingLabel.setHorizontalAlignment(SwingConstants.CENTER);
         loadingPanel.add(loadingLabel);
 
-        // Search panel
+        // ========= Search panel (hidden until needed) =========
         searchField = new JTextField(20);
         searchButton = new JButton("Find");
         findNextButton = new JButton("Find Next");
@@ -111,21 +136,22 @@ public class CrawlerApp extends JFrame {
             findNextMatch();
         });
 
-        // Center panel (kept as BorderLayout so we can drop searchPanel NORTH later)
+        // ========= Center + frame layout =========
         centerPanel = new JPanel(new BorderLayout());
         centerPanel.add(resultsScroll, BorderLayout.CENTER);
 
-        // Top container for inputs and start button
         JPanel top = new JPanel(new BorderLayout());
         top.add(inputPanel, BorderLayout.CENTER);
-        JPanel bottomOfTop = new JPanel(new BorderLayout());
-        top.add(bottomOfTop, BorderLayout.SOUTH);
-        bottomOfTop.add(startButton, BorderLayout.NORTH);
+
+        statusLabel = new JLabel();
 
         add(top, BorderLayout.NORTH);
         add(centerPanel, BorderLayout.CENTER);
         add(statusLabel, BorderLayout.SOUTH);
     }
+
+
+
 
     private void findNextMatch() {
         String content = resultsArea.getText().toLowerCase();
