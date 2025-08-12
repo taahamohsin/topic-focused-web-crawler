@@ -18,11 +18,9 @@ public class CrawlerApp extends JFrame {
     private final JTextField maxPagesField;
     private final JButton startButton;
     private final JButton showIndexButton;
-
     private final JTextPane resultsArea;
     private final JLabel statusLabel;
     private final AtomicInteger resultCount = new AtomicInteger(0);
-
     private final StyledDocument documentReference;
     private final JPanel searchPanel;
     private final JTextField searchField;
@@ -34,12 +32,10 @@ public class CrawlerApp extends JFrame {
     private String lastSearchTerm = "";
     private final JPanel centerPanel;
     private final Style defaultStyle;
-
     private long crawlStartTime;
     private final JScrollPane resultsScroll;
     private final JPanel loadingPanel;
     private boolean resultsShownOnce = false;
-
     private CrawlManager lastCrawlManager;
 
     public CrawlerApp() {
@@ -104,9 +100,9 @@ public class CrawlerApp extends JFrame {
         resultsScroll = new JScrollPane(resultsArea);
         resultsScroll.setBorder(BorderFactory.createTitledBorder("Crawl Results"));
 
-        loadingPanel = new JPanel(new GridBagLayout());
-        JLabel loadingLabel = new JLabel("⏳  Currently crawling…");
-        loadingPanel.add(loadingLabel);
+        loadingPanel = new JPanel(new BorderLayout());
+        JLabel loadingLabel = new JLabel("Currently crawling…", SwingConstants.CENTER);
+        loadingPanel.add(loadingLabel, BorderLayout.CENTER);
 
         searchField = new JTextField(20);
         searchButton = new JButton("Find");
@@ -325,7 +321,6 @@ public class CrawlerApp extends JFrame {
         for (int i = 0; i < widths.length; i++) {
             table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
-
 
         JScrollPane sp = new JScrollPane(table);
         sp.setPreferredSize(new Dimension(1000, 560));
