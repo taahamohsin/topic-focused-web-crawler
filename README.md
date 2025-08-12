@@ -3,7 +3,7 @@
 ## Overview
 This Java desktop application crawls a website starting from a user-provided seed URL, follows internal links up to a specified depth, and extracts sentences containing a keyword.
 
-The application runs concurrently using a SwingWorker for faster page retrieval, provides updates, highlights matching sentences in the GUI, and provides a browsable index of all visited pages.
+The application runs concurrently for faster page retrieval, highlights matching sentences in the GUI, and provides a browsable index of all visited pages.
 
 The three advanced concepts incorporated are Swing GUIs, threads, and networking.
 
@@ -85,7 +85,7 @@ mvn clean install
 Jsoup is the only external dependency in the project for parsing the webpage HTML.
 
 ### Import into Eclipse
-Go to `File -> Import -> Existing Maven Projects`, select the project directory, and click 'Finish'
+Unzip the provided .zip file, then go to `File -> Import -> Existing Maven Projects`, select the project directory, and click 'Finish'
 
 ### Running the Application
 From Eclipse, open `src/main/java/gui/CrawlerApp.java`, right-click the file in the projecr explorer and click `Run As -> Java Application`
