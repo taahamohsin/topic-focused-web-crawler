@@ -16,23 +16,15 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class CrawlTask implements Runnable {
-    private final String url;         // normalized
-    private final String parentUrl;   // normalized; null for seed
+    private final String url;
+    private final String parentUrl;
     private final int depth;
-
     private final CrawlManager manager;
     private final CrawlConfig config;
     private final HTMLParser parser;
     private final Consumer<SentenceMatch> onMatch;
 
-    public CrawlTask(String url,
-                     String parentUrl,
-                     int depth,
-                     CrawlManager manager,
-                     CrawlConfig config,
-                     HTMLParser parser,
-                     Consumer<SentenceMatch> onMatch) {
-
+    public CrawlTask(String url, String parentUrl, int depth, CrawlManager manager, CrawlConfig config, HTMLParser parser, Consumer<SentenceMatch> onMatch) {
         this.url = CrawlManager.normalizeUrl(url);
         this.parentUrl = parentUrl == null ? null : CrawlManager.normalizeUrl(parentUrl);
         this.depth = depth;
@@ -42,16 +34,20 @@ public class CrawlTask implements Runnable {
         this.onMatch = onMatch;
     }
 
+    // Helper class to encapsulate link metadata
     private static class HeadMeta {
         final int status;
         final long len;
         final String type;
+
         HeadMeta(int status, long len, String type) {
-            this.status = status; this.len = len; this.type = type;
+            this.status = status;
+            this.len = len;
+            this.type = type;
         }
     }
 
-    // Quick HEAD to get status/length/content-type (no body)
+    // Make HEAD request to conveniently get status/length/content-type
     private static HeadMeta head(String urlStr) {
         try {
             HttpURLConnection c = (HttpURLConnection) new URL(urlStr).openConnection();
@@ -69,14 +65,13 @@ public class CrawlTask implements Runnable {
         }
     }
 
-    // Treat www and non-www as the same host (practical)
     private static String hostKey(String h) {
         if (h == null) return "";
         h = h.toLowerCase();
         return h.startsWith("www.") ? h.substring(4) : h;
     }
 
-    // Generic rule: only http/https, same host as seed, skip obvious static files & non-page schemes
+    // Helper to ensure we only use links with http/https, same host as the seed, and skip non-text
     private boolean shouldFollow(String targetUrl) {
         if (targetUrl == null) return false;
         String t = targetUrl.trim();
@@ -92,7 +87,7 @@ public class CrawlTask implements Runnable {
             if (!hostKey(u.getHost()).equals(hostKey(base.getHost()))) return false;
 
             String path = u.getPath() == null ? "" : u.getPath().toLowerCase();
-            if (path.matches(".*\\.(?:jpg|jpeg|png|gif|webp|svg|ico|css|js|pdf|zip|gz|tar|rar|7z|mp3|mp4|avi|mov)$"))
+            if (path.matches(".*\\.(?:jpg|jpeg|png|gif|svg|ico|css|mp3|mp4|mov)$"))
                 return false;
 
             return true;
@@ -120,7 +115,8 @@ public class CrawlTask implements Runnable {
                     if (shouldFollow(absUrl)) {
                         String norm = CrawlManager.normalizeUrl(absUrl);
                         if (this.manager.submitNewLink(norm, this.url, this.depth + 1)) {
-                            if (++followed >= 10) break; // limit per page (optional/configurable)
+                            System.out.println(link + " " + followed);
+                            if (++followed >= 10) break;
                         }
                     }
                 }

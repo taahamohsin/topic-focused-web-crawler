@@ -255,7 +255,7 @@ public class CrawlerApp extends JFrame {
                             statusLabel.setText(String.format("Found %d matches so far...", resultCount.get()));
                             showResultsOnce();
                         }),
-                        pagesProcessed -> { /* no-op */ }
+                        pagesprocessed -> { /* do nothing */ }
                 );
                 lastCrawlManager = crawlManager;
                 crawlManager.startCrawl();
