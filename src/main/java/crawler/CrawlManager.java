@@ -78,7 +78,7 @@ public class CrawlManager {
         this.executor.shutdown();
     }
 
-    /** Submit a task for a specific URL/parent/depth. */
+    // Submit a task for a specific URL/parent/depth
     private void submitTask(String url, String parentUrl, int depth) {
         if (depth > this.config.getMaxDepth()) return;
 
@@ -93,10 +93,6 @@ public class CrawlManager {
         });
     }
 
-    /**
-     * Enqueues a newly discovered link and tracks
-     * the parent URL for logging/ancestry and normalizes URLs for dedupe.
-     */
     public synchronized boolean submitNewLink(String url, String parentUrl, int depth) {
         if (depth > this.config.getMaxDepth()) return false;
 

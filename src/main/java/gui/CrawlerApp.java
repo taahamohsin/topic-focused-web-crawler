@@ -4,11 +4,13 @@ import javax.swing.*;
 import javax.swing.text.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import model.CrawlConfig;
 import model.LinkRecord;
+import model.SentenceMatch;
 import crawler.CrawlManager;
 
 public class CrawlerApp extends JFrame {
@@ -35,7 +37,6 @@ public class CrawlerApp extends JFrame {
     private long crawlStartTime;
     private final JScrollPane resultsScroll;
     private final JPanel loadingPanel;
-    private boolean resultsShownOnce = false;
     private CrawlManager lastCrawlManager;
 
     public CrawlerApp() {
@@ -100,6 +101,7 @@ public class CrawlerApp extends JFrame {
         resultsScroll = new JScrollPane(resultsArea);
         resultsScroll.setBorder(BorderFactory.createTitledBorder("Crawl Results"));
 
+        // Static centered loading message panel
         loadingPanel = new JPanel(new BorderLayout());
         JLabel loadingLabel = new JLabel("Currently crawling…", SwingConstants.CENTER);
         loadingPanel.add(loadingLabel, BorderLayout.CENTER);
@@ -237,62 +239,68 @@ public class CrawlerApp extends JFrame {
         searchPanel.setVisible(false);
         crawlStartTime = System.currentTimeMillis();
 
-        showLoadingInResults();
+        // Show the static loading message inside the results area
+        resultsScroll.setViewportView(loadingPanel);
+        resultsScroll.getViewport().revalidate();
+        resultsScroll.getViewport().repaint();
 
-        SwingWorker<Void, Integer> worker = new SwingWorker<Void, Integer>() {
-            @Override
-            protected Void doInBackground() {
-                CrawlManager crawlManager = new CrawlManager(
-                        config,
-                        match -> SwingUtilities.invokeLater(() -> {
-                            appendWithHighlight(
-                                    String.format("[%d] %s",
-                                            resultCount.incrementAndGet(),
-                                            match.getSentence()),
-                                    config.getTopic(),
-                                    match.getSourceUrl()
-                            );
-                            statusLabel.setText(String.format("Found %d matches so far...", resultCount.get()));
-                            showResultsOnce();
-                        }),
-                        pagesprocessed -> { /* do nothing */ }
-                );
-                lastCrawlManager = crawlManager;
-                crawlManager.startCrawl();
-                return null;
-            }
+        final List<SentenceMatch> matches = new ArrayList<>();
 
-            @Override
-            protected void done() {
-                long elapsedMillis = System.currentTimeMillis() - crawlStartTime;
-                double elapsedSeconds = elapsedMillis / 1000.0;
+        Thread background = new Thread(() -> {
+            CrawlManager crawlManager = new CrawlManager(
+                    config,
+                    matches::add,
+                    pagesProcessed -> {}    // no-op
+            );
+            lastCrawlManager = crawlManager;
 
-                SwingUtilities.invokeLater(() -> {
-                    showResultsOnFinish();
-                    startButton.setEnabled(true);
-                    showIndexButton.setEnabled(true);
-                    statusLabel.setText(String.format("Found %d matches in %.2f seconds",
-                            resultCount.get(), elapsedSeconds));
+            crawlManager.startCrawl();
 
-                    if (searchPanel.getParent() == null) {
-                        centerPanel.add(searchPanel, BorderLayout.NORTH);
-                    }
-                    searchPanel.setVisible(true);
+            long elapsedMillis = System.currentTimeMillis() - crawlStartTime;
+            double elapsedSeconds = elapsedMillis / 1000.0;
+            int pagesCrawled;
+            List<LinkRecord> log = crawlManager.getCrawlLog();
+            if (log != null) pagesCrawled = log.size();
+            else pagesCrawled = 0;
 
-                    try {
-                        documentReference.insertString(documentReference.getLength(),
-                                "Crawl complete!\n", defaultStyle);
-                    } catch (BadLocationException ex) {
-                        ex.printStackTrace();
-                    }
+            SwingUtilities.invokeLater(() -> { // to do the crawling in a background thread
+                resultsScroll.setViewportView(resultsArea);
+                resultsScroll.getViewport().revalidate();
+                resultsScroll.getViewport().repaint();
 
-                    revalidate();
-                    repaint();
-                });
-            }
-        };
+                for (SentenceMatch m : matches) {
+                    appendWithHighlight(
+                            String.format("[%d] %s", resultCount.incrementAndGet(), m.getSentence()),
+                            config.getTopic(),
+                            m.getSourceUrl()
+                    );
+                }
 
-        worker.execute();
+                startButton.setEnabled(true);
+                showIndexButton.setEnabled(true);
+                statusLabel.setText(String.format(
+                        "Crawled %d links in %.2f seconds and found %d matches",
+                        pagesCrawled, elapsedSeconds, resultCount.get()
+                ));
+
+                if (searchPanel.getParent() == null) {
+                    centerPanel.add(searchPanel, BorderLayout.NORTH);
+                }
+                searchPanel.setVisible(true);
+
+                try {
+                    documentReference.insertString(documentReference.getLength(),
+                            "Crawl complete!\n", defaultStyle);
+                } catch (BadLocationException ex) {
+                    ex.printStackTrace();
+                }
+
+                revalidate();
+                repaint();
+            });
+        }, "crawler-background");
+
+        background.start();
     }
 
     private void showIndexDialog() {
@@ -325,34 +333,10 @@ public class CrawlerApp extends JFrame {
         JScrollPane sp = new JScrollPane(table);
         sp.setPreferredSize(new Dimension(1000, 560));
         JOptionPane.showMessageDialog(this, sp, "Crawl Index", JOptionPane.PLAIN_MESSAGE);
-
-    }
-
-    private void showLoadingInResults() {
-        resultsShownOnce = false;
-        resultsScroll.setViewportView(loadingPanel);
-        resultsScroll.getViewport().revalidate();
-        resultsScroll.getViewport().repaint();
-    }
-
-    private void showResultsOnce() {
-        if (resultsShownOnce) return;
-        resultsShownOnce = true;
-        resultsScroll.setViewportView(resultsArea);
-        resultsScroll.getViewport().revalidate();
-        resultsScroll.getViewport().repaint();
-    }
-
-    private void showResultsOnFinish() {
-        resultsScroll.setViewportView(resultsArea);
-        resultsScroll.getViewport().revalidate();
-        resultsScroll.getViewport().repaint();
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            CrawlerApp app = new CrawlerApp();
-            app.setVisible(true);
-        });
+        CrawlerApp app = new CrawlerApp();
+        app.setVisible(true);
     }
 }

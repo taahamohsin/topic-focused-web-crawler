@@ -93,13 +93,10 @@ From Eclipse, open `src/main/java/gui/CrawlerApp.java`, right-click the file in 
 ### Usage
 Enter:
 
-Seed URL - starting crawl point
-
-Keyword - term to search for in sentences
-
-Depth limit - link levels to follow
-
-Max pages - maximum pages to visit
+* Seed URL - starting crawl point
+* Keyword - term to search for in sentences
+* Depth limit - link levels to follow
+* Max pages - maximum pages to visit
 
 Click 'Start', watch the results appear with the keyword highlighted, and browse the index to see all visited pages with metadata.
 
@@ -127,8 +124,7 @@ This is just a list of articles and documentation of classes I ended up looking 
 * javax.swing.JScrollPane - https://docs.oracle.com/javase/8/docs/api/javax/swing/JScrollPane.html
 * javax.swing.JTable - https://docs.oracle.com/javase/8/docs/api/javax/swing/JTable.html
 * javax.swing.JOptionPane - https://docs.oracle.com/javase/8/docs/api/javax/swing/JOptionPane.html
-* https://www.javaadvent.com/2012/12/multi-threading-in-java-swing-with-swingworker.html
-* https://www.geeksforgeeks.org/java/swingworker-in-java/
+* https://docs.oracle.com/javase/tutorial/uiswing/concurrency/initial.html
 * https://docs.oracle.com/javase/tutorial/uiswing/concurrency/worker.html
 * javax.swing.SwingWorker - https://docs.oracle.com/javase/8/docs/api/javax/swing/SwingWorker.html
 * javax.swing.SwingUtilities - https://docs.oracle.com/javase/8/docs/api/javax/swing/SwingUtilities.html

@@ -116,7 +116,7 @@ public class CrawlTask implements Runnable {
                         String norm = CrawlManager.normalizeUrl(absUrl);
                         if (this.manager.submitNewLink(norm, this.url, this.depth + 1)) {
                             System.out.println(link + " " + followed);
-                            if (++followed >= 10) break;
+                            if (++followed >= 10) break; // 10 was an arbitrary choice for performance/sanity reasons
                         }
                     }
                 }
