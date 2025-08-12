@@ -4,9 +4,11 @@ import javax.swing.*;
 import javax.swing.text.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import model.CrawlConfig;
+import model.LinkRecord;
 import crawler.CrawlManager;
 
 public class CrawlerApp extends JFrame {
@@ -15,9 +17,12 @@ public class CrawlerApp extends JFrame {
     private final JTextField depthField;
     private final JTextField maxPagesField;
     private final JButton startButton;
+    private final JButton showIndexButton;
+
     private final JTextPane resultsArea;
     private final JLabel statusLabel;
     private final AtomicInteger resultCount = new AtomicInteger(0);
+
     private final StyledDocument documentReference;
     private final JPanel searchPanel;
     private final JTextField searchField;
@@ -29,12 +34,13 @@ public class CrawlerApp extends JFrame {
     private String lastSearchTerm = "";
     private final JPanel centerPanel;
     private final Style defaultStyle;
-    private long crawlStartTime;
 
-    // Keep a handle to the scroll pane and a simple loading panel shown IN the results area
+    private long crawlStartTime;
     private final JScrollPane resultsScroll;
     private final JPanel loadingPanel;
     private boolean resultsShownOnce = false;
+
+    private CrawlManager lastCrawlManager;
 
     public CrawlerApp() {
         super("Topic-Focused Web Crawler");
@@ -43,70 +49,65 @@ public class CrawlerApp extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(800, 500);
 
-        // ========= Top panel (inputs) — no GridBag, just nested panels =========
         JPanel inputPanel = new JPanel();
         inputPanel.setLayout(new BoxLayout(inputPanel, BoxLayout.Y_AXIS));
         inputPanel.setBorder(BorderFactory.createTitledBorder("Crawl Settings"));
 
-        // Row 1: Seed URL (full line)
         JPanel urlRow = new JPanel(new BorderLayout(8, 0));
         JLabel urlLabel = new JLabel("Seed URL:");
         urlField = new JTextField("https://example.com");
         urlRow.add(urlLabel, BorderLayout.WEST);
         urlRow.add(urlField, BorderLayout.CENTER);
 
-        // Row 2: Keyword (full line, slightly larger)
         JPanel topicRow = new JPanel(new BorderLayout(8, 0));
         JLabel topicLabel = new JLabel("Topic:");
-        topicField = new JTextField("example", 28); // a bit wider than default
+        topicField = new JTextField("example", 28);
         topicRow.add(topicLabel, BorderLayout.WEST);
         topicRow.add(topicField, BorderLayout.CENTER);
 
-        // Row 3: Depth + Max Pages + Start button (all in one row)
         JPanel paramsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         JLabel depthLabel = new JLabel("Depth Limit:");
-        depthField = new JTextField("1", 4);  // small numeric-ish field
+        depthField = new JTextField("1", 4);
         JLabel maxPagesLabel = new JLabel("Max Pages:");
-        maxPagesField = new JTextField("10", 4); // small numeric-ish field
+        maxPagesField = new JTextField("10", 4);
 
         startButton = new JButton("Start");
         startButton.setMargin(new Insets(2, 8, 2, 8));
         startButton.setPreferredSize(new Dimension(90, 26));
         startButton.addActionListener(this::handleStart);
 
+        showIndexButton = new JButton("Show Index");
+        showIndexButton.setEnabled(false);
+        showIndexButton.addActionListener(e -> showIndexDialog());
+
         paramsRow.add(depthLabel);
         paramsRow.add(depthField);
         paramsRow.add(maxPagesLabel);
         paramsRow.add(maxPagesField);
         paramsRow.add(Box.createHorizontalStrut(12));
-        paramsRow.add(startButton); // sits right after Max Pages, not stretched
+        paramsRow.add(startButton);
+        paramsRow.add(showIndexButton);
 
-        // Assemble the input panel
         inputPanel.add(urlRow);
         inputPanel.add(Box.createVerticalStrut(6));
         inputPanel.add(topicRow);
         inputPanel.add(Box.createVerticalStrut(6));
         inputPanel.add(paramsRow);
 
-        // ========= Results area =========
         resultsArea = new JTextPane();
+        resultsArea.setEditable(false);
         documentReference = resultsArea.getStyledDocument();
+
         defaultStyle = resultsArea.addStyle("DefaultStyle", null);
         StyleConstants.setForeground(defaultStyle, Color.BLACK);
-        resultsArea.setEditable(false);
 
         resultsScroll = new JScrollPane(resultsArea);
         resultsScroll.setBorder(BorderFactory.createTitledBorder("Crawl Results"));
 
-        // Simple loading panel shown inside the results viewport while crawling
         loadingPanel = new JPanel(new GridBagLayout());
-        JLabel loadingLabel = new JLabel(
-                "<html><div style='text-align:center;'>⏳<br/>Currently crawling…<br/></div></html>"
-        );
-        loadingLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        JLabel loadingLabel = new JLabel("⏳  Currently crawling…");
         loadingPanel.add(loadingLabel);
 
-        // ========= Search panel (hidden until needed) =========
         searchField = new JTextField(20);
         searchButton = new JButton("Find");
         findNextButton = new JButton("Find Next");
@@ -136,7 +137,6 @@ public class CrawlerApp extends JFrame {
             findNextMatch();
         });
 
-        // ========= Center + frame layout =========
         centerPanel = new JPanel(new BorderLayout());
         centerPanel.add(resultsScroll, BorderLayout.CENTER);
 
@@ -150,11 +150,13 @@ public class CrawlerApp extends JFrame {
         add(statusLabel, BorderLayout.SOUTH);
     }
 
-
-
-
     private void findNextMatch() {
-        String content = resultsArea.getText().toLowerCase();
+        String content;
+        try {
+            content = documentReference.getText(0, documentReference.getLength()).toLowerCase();
+        } catch (BadLocationException e) {
+            return;
+        }
         String searchTerm = lastSearchTerm.toLowerCase();
 
         int index = content.indexOf(searchTerm, lastSearchIndex);
@@ -173,11 +175,11 @@ public class CrawlerApp extends JFrame {
         }
     }
 
-    private void appendWithHighlight(String sentence, String keyword) {
+    private void appendWithHighlight(String sentence, String keyword, String sourceUrl) {
         Style keywordStyle = resultsArea.getStyle("KeywordStyle");
         if (keywordStyle == null) {
             keywordStyle = resultsArea.addStyle("KeywordStyle", null);
-            StyleConstants.setForeground(keywordStyle, Color.GREEN);
+            StyleConstants.setForeground(keywordStyle, new Color(0x1a7f37));
             StyleConstants.setBold(keywordStyle, true);
         }
 
@@ -189,15 +191,18 @@ public class CrawlerApp extends JFrame {
             int index = lowerSentence.indexOf(lowerKeyword, lastIndex);
             if (index == -1) {
                 try {
-                    documentReference.insertString(documentReference.getLength(), sentence.substring(lastIndex), defaultStyle);
+                    documentReference.insertString(documentReference.getLength(),
+                            sentence.substring(lastIndex), defaultStyle);
                 } catch (BadLocationException e) {
                     e.printStackTrace();
                 }
                 break;
             }
             try {
-                documentReference.insertString(documentReference.getLength(), sentence.substring(lastIndex, index), defaultStyle);
-                documentReference.insertString(documentReference.getLength(), sentence.substring(index, index + keyword.length()), keywordStyle);
+                documentReference.insertString(documentReference.getLength(),
+                        sentence.substring(lastIndex, index), defaultStyle);
+                documentReference.insertString(documentReference.getLength(),
+                        sentence.substring(index, index + keyword.length()), keywordStyle);
             } catch (BadLocationException e) {
                 e.printStackTrace();
             }
@@ -205,7 +210,8 @@ public class CrawlerApp extends JFrame {
         }
 
         try {
-            documentReference.insertString(documentReference.getLength(), "\n\n", defaultStyle);
+            documentReference.insertString(documentReference.getLength(),
+                    "\nSource: " + sourceUrl + "\n\n", defaultStyle);
         } catch (BadLocationException e) {
             e.printStackTrace();
         }
@@ -230,6 +236,7 @@ public class CrawlerApp extends JFrame {
 
         clearResults();
         startButton.setEnabled(false);
+        showIndexButton.setEnabled(false);
         resultCount.set(0);
         searchPanel.setVisible(false);
         crawlStartTime = System.currentTimeMillis();
@@ -242,15 +249,19 @@ public class CrawlerApp extends JFrame {
                 CrawlManager crawlManager = new CrawlManager(
                         config,
                         match -> SwingUtilities.invokeLater(() -> {
-                            appendWithHighlight(String.format("[%d] %s\nSource: %s\n\n",
-                                    resultCount.incrementAndGet(),
-                                    match.getSentence(),
-                                    match.getSourceUrl()), config.getTopic());
+                            appendWithHighlight(
+                                    String.format("[%d] %s",
+                                            resultCount.incrementAndGet(),
+                                            match.getSentence()),
+                                    config.getTopic(),
+                                    match.getSourceUrl()
+                            );
                             statusLabel.setText(String.format("Found %d matches so far...", resultCount.get()));
-                            showResultsOnce(); // switch back to the text pane on first result
+                            showResultsOnce();
                         }),
                         pagesProcessed -> { /* no-op */ }
                 );
+                lastCrawlManager = crawlManager;
                 crawlManager.startCrawl();
                 return null;
             }
@@ -261,10 +272,11 @@ public class CrawlerApp extends JFrame {
                 double elapsedSeconds = elapsedMillis / 1000.0;
 
                 SwingUtilities.invokeLater(() -> {
-                    // Ensure we're showing the results view even if there were zero matches
                     showResultsOnFinish();
                     startButton.setEnabled(true);
-                    statusLabel.setText(String.format("Found %d matches in %.2f seconds", resultCount.get(), elapsedSeconds));
+                    showIndexButton.setEnabled(true);
+                    statusLabel.setText(String.format("Found %d matches in %.2f seconds",
+                            resultCount.get(), elapsedSeconds));
 
                     if (searchPanel.getParent() == null) {
                         centerPanel.add(searchPanel, BorderLayout.NORTH);
@@ -272,7 +284,8 @@ public class CrawlerApp extends JFrame {
                     searchPanel.setVisible(true);
 
                     try {
-                        documentReference.insertString(documentReference.getLength(), "\nCrawl complete!\n", defaultStyle);
+                        documentReference.insertString(documentReference.getLength(),
+                                "Crawl complete!\n", defaultStyle);
                     } catch (BadLocationException ex) {
                         ex.printStackTrace();
                     }
@@ -284,6 +297,40 @@ public class CrawlerApp extends JFrame {
         };
 
         worker.execute();
+    }
+
+    private void showIndexDialog() {
+        if (lastCrawlManager == null) return;
+        List<LinkRecord> log = lastCrawlManager.getCrawlLog();
+
+        String[] cols = {"URL", "Depth", "Parent", "Status", "Size", "Type"};
+        Object[][] data;
+        synchronized (log) {
+            data = new Object[log.size()][cols.length];
+            for (int i = 0; i < log.size(); i++) {
+                LinkRecord r = log.get(i);
+                data[i][0] = r.url;
+                data[i][1] = r.depth;
+                data[i][2] = r.parentUrl == null ? "" : r.parentUrl;
+                data[i][3] = r.status;
+                data[i][4] = r.sizeBytes >= 0 ? r.sizeBytes : "";
+                data[i][5] = r.contentType == null ? "" : r.contentType;
+            }
+        }
+        JTable table = new JTable(data, cols);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        table.setFillsViewportHeight(true);
+
+        int[] widths = { 430, 60, 430, 60, 100, 150 }; // URL, Depth, Parent, Status, Size, Type respectively
+        for (int i = 0; i < widths.length; i++) {
+            table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+        }
+
+
+        JScrollPane sp = new JScrollPane(table);
+        sp.setPreferredSize(new Dimension(1000, 560));
+        JOptionPane.showMessageDialog(this, sp, "Crawl Index", JOptionPane.PLAIN_MESSAGE);
+
     }
 
     private void showLoadingInResults() {
